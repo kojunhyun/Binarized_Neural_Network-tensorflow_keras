@@ -36,11 +36,10 @@ To use, simply 'import xenqore'
 
 
 from tensorflow.keras.utils import get_custom_objects
-#from keras.utils import get_custom_objects
 
 
 def register_keras_custom_object(cls):
-    """Register custom object based on tensorflow_keras class"""
+    '''Register custom object based on tensorflow_keras class'''
     
     get_custom_objects()[cls.__name__] = cls
     
@@ -48,55 +47,69 @@ def register_keras_custom_object(cls):
 
 
 class NetworkConfig():
-    """Definition of network's hyper parameter for xenqore(trained) model
+    '''Definition of network's hyper parameter for xenqore(trained) model
 
     This class sets model_info structure
     batch_size: number of batch data 
     initial_lr: initial learning rate 
     var_decay: learning rate decay
     epocsh: number of iteration for training total train data
-	"""
-    user_defined_name = ''
-    batch_size = 80
-    initial_lr = 0.0095
-    var_decay = 1e-5
-    epochs = 500
-    classes = 10
+	'''
+
+    def __init__(self): 
+        
+        self.user_defined_name = ''
+        self.batch_size = 50
+        self.initial_lr = 0.0095
+        self.var_decay = 1e-5
+        self.epochs = 500
+        self.classes = 10
+
+    def __call__(self):
+
+        cfg = dict()
+        cfg['user_defined_name'] = self.user_defined_name
+        cfg['batch_size'] = self.batch_size
+        cfg['initial_lr'] = self.initial_lr
+        cfg['var_decay'] = self.var_decay
+        cfg['epochs'] = self.epochs
+        cfg['classes'] = self.classes
+        return cfg
 
 
 def layers_config(quantized_weight=True, weight_clip=True, use_bias=True):
-    """Set layer's config"""
+    '''Set layer's config'''
     
     kwargs = dict()
 
     if quantized_weight is True:
-        kwargs["kernel_quantizer"] = "ste_sign"
+        kwargs['kernel_quantizer'] = 'ste_sign'
     else:
-        kwargs["kernel_quantizer"] = None
+        kwargs['kernel_quantizer'] = None
     
 
     if weight_clip is True:
-        kwargs["kernel_constraint"] = "weight_clip"
+        kwargs['kernel_constraint'] = 'weight_clip'
     else:
-        kwargs["kernel_constraint"] = None
+        kwargs['kernel_constraint'] = None
 
 
     if use_bias is True:
-        kwargs["use_bias"] = True
+        kwargs['use_bias'] = True
     else:
-        kwargs["use_bias"] = False    
+        kwargs['use_bias'] = False    
 
         
     return kwargs
     
 
 def activations_config(binary_activation=True):
-    """Set activation's config"""    
+    '''Set activation's config'''
 
     if binary_activation is True:
-        kwargs = "ste_sign"
+        kwargs = 'ste_sign'
     else:
-        kwargs = "relu"
+        kwargs = 'relu'
     
     return kwargs
 

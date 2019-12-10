@@ -39,25 +39,33 @@ import os
 
 import json
 
+import ctypes
+
 import struct
 
 import xenqore
+
+import platform
 
 import numpy as np
 
 import tensorflow as tf
 
+from xenqore.constants import *
+
+from xenqore.datatypes import *
+
 from collections import OrderedDict
 
 
 def trans_weight_ordering(weight):
-    """The weight ordering transform tensorflow to device"""
+    '''The weight ordering transform tensorflow to device'''
 
     tf_weight = weight.numpy()
     tf_weight = ((np.sign(np.sign(tf_weight) + 1e-8) + 1 ) / 2).astype(np.int)
     
     device_weight = []        
-    #print('weight.shape : ', len(tf_weight.shape))
+
     if len(tf_weight.shape) == 2:
         
         H = tf_weight.shape[0]
@@ -84,16 +92,13 @@ def trans_weight_ordering(weight):
 
 
 def save_info_to_json(model, user_defined_name, save_path):
-    #model.summary()
+
     depth = 0
     node = OrderedDict()
     for var in model.layers:
         node_info = OrderedDict()
 
-        print('var name : ', var.name)
-
         if 'Qconv' in var.name or 'quantized_conv2d' in var.name:
-            print('test1 var name : ', var.name)
             if depth == 0:
                 node_info['op_type'] = 1
             else:
@@ -115,12 +120,10 @@ def save_info_to_json(model, user_defined_name, save_path):
             node_info['initializer'] = file_info
 
             node[str(depth)] = node_info
-            print('conv node info')
-            print(json.dumps(node_info, ensure_ascii=False, indent='\t'))
+
             depth += 1
-        
+
         elif 'MaxPool' in var.name or 'max_pooling2d' in var.name:
-            print('test1 var name : ', var.name)
             node_info['op_type'] = 4
 
             # input_size
@@ -133,12 +136,10 @@ def save_info_to_json(model, user_defined_name, save_path):
             node_info['channel_size'] = node_channel
 
             node[str(depth)] = node_info
-            print('maxpool node info')
-            print(json.dumps(node_info, ensure_ascii=False, indent='\t'))
+
             depth += 1
 
         elif 'G_A_Pool' in var.name or 'global_average_pooling2d' in var.name:
-            print('test1 var name : ', var.name)
             node_info['op_type'] = 8
 
             # input_size
@@ -151,12 +152,9 @@ def save_info_to_json(model, user_defined_name, save_path):
             node_info['channel_size'] = node_channel
 
             node[str(depth)] = node_info
-            print('gapool node info')
-            print(json.dumps(node_info, ensure_ascii=False, indent='\t'))
             depth += 1
 
         elif 'Qdense' in var.name or 'quantized_dense' in var.name:
-            print('test1 var name : ', var.name)
             node_info['op_type'] = 16
 
             # input_size
@@ -175,11 +173,8 @@ def save_info_to_json(model, user_defined_name, save_path):
             node_info['initializer'] = file_info
 
             node[str(depth)] = node_info
-            print('fc node info')
-            print(json.dumps(node_info, ensure_ascii=False, indent='\t'))
-            depth += 1
-        print('depth : ', depth)
 
+            depth += 1
 
     file_data = OrderedDict()
     file_data['name'] = user_defined_name
@@ -187,18 +182,17 @@ def save_info_to_json(model, user_defined_name, save_path):
     file_data['version'] = '1.0'
     file_data['model'] = {'depth' : depth, 'node' : node}
 
-    #print(json.dumps(file_data, ensure_ascii=False, indent='\t'))
-    with open(os.path.join(save_path, 'make.json'), 'w', encoding='utf-8') as make_file:
+    with open(os.path.join(save_path, 'network.json'), 'w', encoding='utf-8') as make_file:
         json.dump(file_data, make_file, ensure_ascii=False, indent='\t')
 
     return file_data
     
 
 def transform_model_to_device(model, user_defined_name='UserDefined', save_path='DeviceSavePath'):
-    """
+    '''
     integer bias is made by using batch_normalization's beta, gamma, mean and variance.  
     Each layer's weight and integer bias based on tensorflow are transformed to use in device.
-    """
+    '''
     
     # make the save dir
     save_path = user_defined_name + '_' + save_path
@@ -211,11 +205,7 @@ def transform_model_to_device(model, user_defined_name='UserDefined', save_path=
             print('Failed to create directory!!!!')
             raise
 
-    
     json_info = save_info_to_json(model, user_defined_name, save_path)
-    print(json.dumps(json_info, ensure_ascii=False, indent='\t'))
-
-
 
     # tensorflow model extraction
 
@@ -245,21 +235,11 @@ def transform_model_to_device(model, user_defined_name='UserDefined', save_path=
     for i in range(len(json_info['model']['node'])):
         
         if 'initializer' in json_info['model']['node'][str(i)]:
-
-            #print(i)
-            #print('variables_count : ', variables_count)
-
-            
-
             # name setting
             weight_file_name = os.path.join(save_path, json_info['model']['node'][str(i)]['initializer']['0']) 
             integer_bias_file_name = os.path.join(save_path, json_info['model']['node'][str(i)]['initializer']['1']) 
 
             trans_weight = trans_weight_ordering(weight[variables_count])
-
-            print(weight_file_name)
-            print(integer_bias_file_name)
-
 
             # integer bias calculation
             integer_bias = bias[variables_count].numpy() \
@@ -271,8 +251,6 @@ def transform_model_to_device(model, user_defined_name='UserDefined', save_path=
 
             integer_bias = np.where(integer_bias == np.inf, 9999, integer_bias)
             integer_bias = integer_bias.astype(np.int16)
-
-
 
             # convert tensorflow model to device bin file
             fw_b = open(integer_bias_file_name, 'wb')
@@ -327,14 +305,100 @@ def transform_model_to_device(model, user_defined_name='UserDefined', save_path=
                                                     int(conv_reorder_str[of][y][x][32 :64 ], base=2),\
                                                     int(conv_reorder_str[of][y][x][0  :32 ], base=2)))
 
-
-
                 fw_b.close()
 
             variables_count += 1
 
-            
-            #print(json_info['model']['node'][str(i)])
 
-        #if json_info['model']['node'][str(i)]['initializer']:
+#
+# Global variable for nmengine library
+#
+_lib = None
+_lib_path = ''
+
+
+def set_lib_path(lib_path):
+    """Set library path directly"""
+    global _lib_path
+    _lib_path = lib_path
+
+
+def get_devices():
+    """Gets a list of the XenQore devices that is detected by driver
+
+    And it initializes the nmengine library
+    """
+    global _lib
+
+    result = SUCCESS
+    devices = []
+    
+    if _lib == None:
+        
+        # print('platform',platform.architecture(), 'uname', platform.uname()[0])
+        # Load appropriate library for the operating platform 
+        if platform.uname()[0] == 'Windows':
+            name = _lib_path + 'xenqore.dll'
             
+        elif platform.uname()[0] == 'Linux':
+            name = _lib_path + 'libxenqore.so'
+            
+        elif platform.uname()[0] == 'Darwin':
+            name = _lib_path + 'libxenqore.dylib'
+
+        else:
+            name = _lib_path + 'libxenqore.so'
+
+        #print('dll name', name)
+        _lib = ctypes.cdll.LoadLibrary(name)
+    
+
+    # Up to five device information is inquired. 
+    detect_count = ctypes.c_ubyte(5)
+    devices_tmp = (Device * detect_count.value)()
+    result = _lib.xq_get_devices(ctypes.byref(devices_tmp),ctypes.byref(detect_count))
+
+    for i in range(detect_count.value):
+        devices.append(devices_tmp[i])
+
+    return result, devices
+
+
+def connect(device):
+    """Opens selected device and performs the initialization of the XenQore."""
+    return _lib.xq_connect(ctypes.byref(device))
+
+
+def close(device):
+    """Close selected device"""
+    return _lib.xq_close(ctypes.byref(device))
+
+
+def set_network_mode(device, nwtype):
+    """Sets the XenQore network mode.
+    
+    0: bNN network mode, 1: nNM network mode
+    """
+    return _lib.xq_set_network_mode(ctypes.byref(device), ctypes.c_ubyte(nwtype))
+
+
+def bnn_load_model(device, path):
+    """Load inference model from file"""
+    result = SUCCESS
+    
+    # create byte objects from the strings
+    b_path = path.encode('utf-8')
+    result = _lib.xq_bnn_load_model(ctypes.c_char_p(b_path))
+    
+    return result
+
+
+def bnn_predict(device, input, length):
+    """Predict 'input' vector which categories it belongs to."""
+    result = SUCCESS
+    cat = ctypes.c_ushort(0)
+    result = _lib.xq_bnn_predict(ctypes.byref(device), input.ctypes.data_as(ctypes.POINTER(ctypes.c_ubyte)), \
+        ctypes.c_uint32(length), ctypes.byref(cat))
+    
+    return result, cat.value
+

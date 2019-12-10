@@ -43,15 +43,15 @@ from xenqore.utils import register_keras_custom_object
 
 from xenqore.math import sign
 
-from tensorflow.keras.layers import Activation, BatchNormalization, Dropout, MaxPool2D, GlobalAveragePooling2D, AveragePooling2D, Flatten
+from tensorflow.keras.layers import Activation, Dropout, MaxPool2D, GlobalAveragePooling2D, AveragePooling2D, Flatten
 
 
 @tf.custom_gradient
 def _binarize_with_identity_grad(x):
-    """
+    '''
     Gradient calculation of binarized weight
     https://www.tensorflow.org/versions/r2.0/api_docs/python/tf/custom_gradient
-    """
+    '''
 
     def grad(dy):
         return dy
@@ -59,21 +59,9 @@ def _binarize_with_identity_grad(x):
     return sign(x), grad
 
 
-@tf.custom_gradient
-def _binarize_with_weighted_grad(x):
-    """
-    Regulate Gradient calculation of binarized weight
-    """
-
-    def grad(dy):
-        return (1 - tf.abs(x)) * 2 * dy
-
-    return sign(x), grad
-
-
 @register_keras_custom_object
 class WeightClip(tf.keras.constraints.Constraint):
-    """
+    '''
     Weight Clip constraint
     Constrains the weights incident to each hidden unit
     to be between `[-clip_value, clip_value]`.
@@ -81,7 +69,7 @@ class WeightClip(tf.keras.constraints.Constraint):
 
     # Arguments
     clip_value: The value to clip incoming weights.
-    """
+    '''
 
     def __init__(self, clip_value=1):
         self.clip_value = clip_value
@@ -101,7 +89,7 @@ class weight_clip(WeightClip):
     
 @register_keras_custom_object
 def ste_sign(x):
-    """
+    '''
     Straight-Through Estimator by using sign binarization function.
     forward : sign
     backward : Straight-Through Estimator
@@ -124,7 +112,7 @@ def ste_sign(x):
     # References
     - [Binarized Neural Networks: Training Deep Neural Networks with Weights and
     Activations Constrained to +1 or -1](http://arxiv.org/abs/1602.02830)
-    """
+    '''
 
     x = tf.clip_by_value(x, -1, 1)
 
@@ -132,24 +120,24 @@ def ste_sign(x):
 
 
 def serialize(initializer):
-    """Serialize object to string"""
+    '''Serialize object to string'''
     
     return tf.keras.utils.serialize_keras_object(initializer)
 
 
 def deserialize(name, custom_objects=None):
-    """Deserialize string to object"""
+    '''Deserialize string to object'''
 
     return tf.keras.utils.deserialize_keras_object(
         name,
         module_objects=globals(),
         custom_objects=custom_objects,
-        printable_module_name="quantization function",
+        printable_module_name='quantization function',
     )
 
 
 def get(identifier):
-    """Get the config of input_quantizer or kernel_quantizer"""
+    '''Get the config of input_quantizer or kernel_quantizer'''
     
     if identifier is None:
         return None
@@ -158,12 +146,12 @@ def get(identifier):
     if callable(identifier):
         return identifier
     raise ValueError(
-        f"Could not interpret quantization function identifier: {identifier}"
+        f'Could not interpret quantization function identifier: {identifier}'
     )
 
 
 class QuantizedLayerBase(tf.keras.layers.Layer):
-    """
+    '''
     Base class for defining QuantizedDense or QuantizedConv2D
 
     # Arguments
@@ -184,7 +172,7 @@ class QuantizedLayerBase(tf.keras.layers.Layer):
     
     
     
-    """
+    '''
 
     def __init__(self, *args, input_quantizer=None, kernel_quantizer=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -193,25 +181,30 @@ class QuantizedLayerBase(tf.keras.layers.Layer):
         self.kernel_quantizer = get(kernel_quantizer)
 
         if kernel_quantizer and not self.kernel_constraint:
-            print("Using a weight quantizer without setting `kernel_constraint` ")
-            print("may result in starved weights (where the gradient is always zero).")    
+            print('Using a weight quantizer without setting `kernel_constraint` ')
+            print('may result in starved weights (where the gradient is always zero).')    
                         
-
     @property
     def quantized_weights(self):
+
         if self.kernel_quantizer and self.kernel is not None:
             return [self.kernel_quantizer(self.kernel)]
+
         return []
 
     @property
     def quantized_latent_weights(self):
+
         if self.kernel_quantizer and self.kernel is not None:
             return [self.kernel]
+
         return []
 
     def call(self, inputs):
+
         if self.input_quantizer:
             inputs = self.input_quantizer(inputs)
+
         if self.kernel_quantizer:
             full_precision_kernel = self.kernel
             self.kernel = self.kernel_quantizer(self.kernel)
@@ -225,15 +218,15 @@ class QuantizedLayerBase(tf.keras.layers.Layer):
 
     def get_config(self):
         config = {
-            "input_quantizer": serialize(self.input_quantizer),
-            "kernel_quantizer": serialize(self.kernel_quantizer),
+            'input_quantizer': serialize(self.input_quantizer),
+            'kernel_quantizer': serialize(self.kernel_quantizer),
         }
         return {**super().get_config(), **config}
 
 
 @register_keras_custom_object
 class QuantizedDense(QuantizedLayerBase, tf.keras.layers.Dense):
-    """
+    '''
     Quantized-Dense layer class 
     
     If the input to the layer has a rank greater than 2, then it is flattened
@@ -261,7 +254,7 @@ class QuantizedDense(QuantizedLayerBase, tf.keras.layers.Dense):
     # Output shape
     N-D tensor with shape: `(batch_size, ..., units)`. For instance, for a 2D input with
     shape `(batch_size, input_dim)`, the output would have shape `(batch_size, units)`.
-    """
+    '''
 
     def __init__(
         self,
@@ -270,8 +263,8 @@ class QuantizedDense(QuantizedLayerBase, tf.keras.layers.Dense):
         use_bias=True,
         input_quantizer=None,
         kernel_quantizer=None,
-        kernel_initializer="glorot_uniform",
-        bias_initializer="zeros",
+        kernel_initializer='glorot_uniform',
+        bias_initializer='zeros',
         kernel_regularizer=None,
         bias_regularizer=None,
         activity_regularizer=None,
@@ -298,7 +291,7 @@ class QuantizedDense(QuantizedLayerBase, tf.keras.layers.Dense):
 
 @register_keras_custom_object
 class QuantizedConv2D(QuantizedLayerBase, tf.keras.layers.Conv2D):
-    """
+    '''
     Quantized-Conv2D layer class 
 
     This layer creates a convolution kernel that is convolved
@@ -356,22 +349,22 @@ class QuantizedConv2D(QuantizedLayerBase, tf.keras.layers.Conv2D):
     or 4D tensor with shape:
     `(samples, new_rows, new_cols, filters)` if data_format='channels_last'.
     `rows` and `cols` values might have changed due to padding.
-    """
+    '''
     
     def __init__(
         self,
         filters,
-        kernel_size,
+        kernel_size=3,
         strides=(1, 1),
-        padding="same",
+        padding='same',
         data_format=None,
         dilation_rate=(1, 1),
         activation=None,
         use_bias=True,
         input_quantizer=None,
         kernel_quantizer=None,
-        kernel_initializer="glorot_uniform",
-        bias_initializer="zeros",
+        kernel_initializer='glorot_uniform',
+        bias_initializer='zeros',
         kernel_regularizer=None,
         bias_regularizer=None,
         activity_regularizer=None,
@@ -401,3 +394,119 @@ class QuantizedConv2D(QuantizedLayerBase, tf.keras.layers.Conv2D):
         )
 
 
+@register_keras_custom_object
+class BatchNorm(tf.keras.layers.BatchNormalization):
+    '''Base class of Batch normalization layer (Ioffe and Szegedy, 2014).
+    Normalize the activations of the previous layer at each batch,
+    i.e. applies a transformation that maintains the mean activation
+    close to 0 and the activation standard deviation close to 1.
+    
+    # Arguments
+    axis: Integer, the axis that should be normalized(typically the features axis).
+        For instance, after a `Conv2D` layer with `data_format="channels_first"`,
+        set `axis=1` in `BatchNormalization`.
+    momentum: Momentum for the moving average.
+    epsilon: Small float added to variance to avoid dividing by zero.
+    center: If True, add offset of `beta` to normalized tensor. If False, `beta` is ignored.
+    scale: If True, multiply by `gamma`.
+        If False, `gamma` is not used. When the next layer is linear (also e.g. `nn.relu`),
+        this can be disabled since the scaling will be done by the next layer.
+    beta_initializer: Initializer for the beta weight.
+    gamma_initializer: Initializer for the gamma weight.
+    moving_mean_initializer: Initializer for the moving mean.
+    moving_variance_initializer: Initializer for the moving variance.
+    beta_regularizer: Optional regularizer for the beta weight.
+    gamma_regularizer: Optional regularizer for the gamma weight.
+    beta_constraint: Optional constraint for the beta weight.
+    gamma_constraint: Optional constraint for the gamma weight.
+    renorm: Whether to use Batch Renormalization
+        (https://arxiv.org/abs/1702.03275). This adds extra variables during training. 
+        The inference is the same for either value of this parameter.
+    renorm_clipping: A dictionary that may map keys 'rmax', 'rmin', 'dmax' to
+        scalar `Tensors` used to clip the renorm correction. The correction
+        `(r, d)` is used as `corrected_value = normalized_value * r + d`, with
+        `r` clipped to [rmin, rmax], and `d` to [-dmax, dmax]. Missing rmax, rmin,
+        dmax are set to inf, 0, inf, respectively.
+    renorm_momentum: Momentum used to update the moving means and standard
+        deviations with renorm. Unlike `momentum`, this affects training
+        and should be neither too small (which would add noise) nor too large
+        (which would give stale estimates). Note that `momentum` is still applied
+        to get the means and variances for inference.
+    fused: if `True`, use a faster, fused implementation, or raise a ValueError
+        if the fused implementation cannot be used. If `None`, use the faster
+        implementation if possible. If False, do not used the fused
+        implementation.
+    trainable: Boolean, if `True` the variables will be marked as trainable.
+    virtual_batch_size: An `int`. By default, `virtual_batch_size` is `None`,
+        which means batch normalization is performed across the whole batch. When
+        `virtual_batch_size` is not `None`, instead perform "Ghost Batch
+        Normalization", which creates virtual sub-batches which are each
+        normalized separately (with shared gamma, beta, and moving statistics).
+        Must divide the actual batch size during execution.
+    adjustment: A function taking the `Tensor` containing the (dynamic) shape of
+        the input tensor and returning a pair (scale, bias) to apply to the
+        normalized values (before gamma and beta), only during training. For
+        example, if axis==-1,
+        `adjustment = lambda shape: (tf.random.uniform(shape[-1:], 0.93, 1.07),
+                                    tf.random.uniform(shape[-1:], -0.1, 0.1))`
+        will scale the normalized value by up to 7% up or down, then shift the
+        result by up to 0.1 (with independent scaling and bias for each feature
+        but shared across all examples), and finally apply gamma and/or beta. If
+        `None`, no adjustment is applied. 
+        Cannot be specified if virtual_batch_size is specified.
+    
+    # Call arguments:
+    inputs: Input tensor (of any rank).
+    training: Python boolean indicating whether the layer should behave in
+        training mode or in inference mode.
+        - `training=True`: The layer will normalize its inputs using the
+            mean and variance of the current batch of inputs.
+        - `training=False`: The layer will normalize its inputs using the
+            mean and variance of its moving statistics, learned during training.
+    
+    # Input shape:
+    Arbitrary. Use the keyword argument `input_shape`
+    (tuple of integers, does not include the samples axis)
+    when using this layer as the first layer in a model.
+    
+    # Output shape:
+    Same shape as input.
+    References:
+    - [Batch Normalization: Accelerating Deep Network Training by Reducing
+        Internal Covariate Shift](https://arxiv.org/abs/1502.03167)
+        {{TRAINABLE_ATTRIBUTE_NOTE}}
+    '''
+    
+    def __init__(
+        self,
+        axis=-1,
+        momentum=0.99,
+        epsilon=0.001,
+        center=True,
+        scale=True,
+        beta_initializer='zeros',
+        gamma_initializer='ones',
+        moving_mean_initializer='zeros',
+        moving_variance_initializer='ones',
+        beta_regularizer=None,
+        gamma_regularizer=None,
+        beta_constraint=None,
+        gamma_constraint=tf.keras.constraints.NonNeg(),        
+        **kwargs
+        ):
+        super().__init__(
+            axis=axis,
+            momentum=momentum,
+            epsilon=epsilon,
+            center=center,
+            scale=scale,
+            beta_initializer=beta_initializer,
+            gamma_initializer=gamma_initializer,
+            moving_mean_initializer=moving_mean_initializer,
+            moving_variance_initializer=moving_variance_initializer,
+            beta_regularizer=beta_regularizer,
+            gamma_regularizer=gamma_regularizer,
+            beta_constraint=beta_constraint,
+            gamma_constraint=gamma_constraint,            
+            **kwargs
+        )
